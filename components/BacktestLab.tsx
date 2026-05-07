@@ -45,25 +45,27 @@ export default function BacktestLab() {
   const [seed, setSeed] = useState(7);
   const [costBps, setCostBps] = useState(5);
   const [slipBps, setSlipBps] = useState(2);
-  const [tab, setTab] = useState<"single" | "wf">("single");
+  const [running, setRunning] = useState<"single" | "wf" | null>(null);
   const [res, setRes] = useState<BacktestRes | null>(null);
   const [wf, setWF] = useState<WFRes | null>(null);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  const busy = running !== null;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
   async function runSingle() {
-    setBusy(true); setErr(""); setWF(null);
+    setRunning("single"); setErr(""); setWF(null);
     try {
       setRes(await api("/backtest", {
         strategy, n_assets: nAssets, n_days: nDays, seed,
         cost_bps: costBps, slippage_bps: slipBps,
       }));
     } catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { setRunning(null); }
   }
 
   async function runWF() {
-    setBusy(true); setErr(""); setRes(null);
+    setRunning("wf"); setErr(""); setRes(null);
     try {
       setWF(await api("/walk-forward", {
         strategy, n_assets: nAssets, n_days: nDays, seed,
@@ -71,7 +73,7 @@ export default function BacktestLab() {
         train_window: 252, test_window: 63,
       }));
     } catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { setRunning(null); }
   }
 
   const meta = STRATEGIES.find(s => s.id === strategy)!;
@@ -102,9 +104,11 @@ export default function BacktestLab() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <div><label className="label">Assets</label>
-                <input className="input" type="number" min={2} max={10} value={nAssets} onChange={e => setNAssets(+e.target.value)} /></div>
+                <input className="input" type="number" min={2} max={10} value={nAssets}
+                       onChange={e => setNAssets(clamp(+e.target.value, 2, 10))} /></div>
               <div><label className="label">Days</label>
-                <input className="input" type="number" min={300} max={4000} value={nDays} onChange={e => setNDays(+e.target.value)} /></div>
+                <input className="input" type="number" min={300} max={4000} value={nDays}
+                       onChange={e => setNDays(clamp(+e.target.value, 300, 4000))} /></div>
             </div>
             <div style={{ marginBottom: 14 }}>
               <label className="label">Seed</label>
@@ -112,16 +116,18 @@ export default function BacktestLab() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <div><label className="label">Costs (bps)</label>
-                <input className="input" type="number" value={costBps} onChange={e => setCostBps(+e.target.value)} step="0.5" /></div>
+                <input className="input" type="number" min={0} value={costBps}
+                       onChange={e => setCostBps(Math.max(0, +e.target.value))} step="0.5" /></div>
               <div><label className="label">Slippage (bps)</label>
-                <input className="input" type="number" value={slipBps} onChange={e => setSlipBps(+e.target.value)} step="0.5" /></div>
+                <input className="input" type="number" min={0} value={slipBps}
+                       onChange={e => setSlipBps(Math.max(0, +e.target.value))} step="0.5" /></div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
               <button className="btn" onClick={runSingle} disabled={busy} style={{ flex: 1 }}>
-                {busy && tab === "single" ? "Running..." : "Single run"}
+                {running === "single" ? "Running..." : "Single run"}
               </button>
               <button className="btn" onClick={runWF} disabled={busy} style={{ flex: 1, background: "transparent", border: "1px solid var(--border2)", color: "var(--accent2)" }}>
-                {busy && tab === "wf" ? "Running..." : "Walk-forward"}
+                {running === "wf" ? "Running..." : "Walk-forward"}
               </button>
             </div>
             {err && <div style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 12 }}>{err}</div>}
